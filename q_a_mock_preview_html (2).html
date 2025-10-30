@@ -1,0 +1,252 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Global Business Trips Q&A Board (Preview)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --navy-500: #334b7c;
+      --navy-600: #2d3e6a;
+      --navy-700: #24386b;
+      --navy-800: #1b2b59;
+      --navy-900: #0a1738;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(180deg, #f4f8ff 0%, #ffffff 100%);
+    }
+
+    .quote-box {
+      background: linear-gradient(145deg, #e8f0ff, #f9fbff);
+      box-shadow: 2px 2px 10px rgba(0,0,0,0.08), -2px -2px 10px rgba(255,255,255,0.7);
+      border-left: 4px solid var(--navy-600);
+      border-radius: 0.5rem;
+    }
+
+    .plane {
+      position: fixed;
+      top: 9vh;
+      left: -12vw;
+      font-size: 18px;
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,.15));
+      animation: plane-fly 3.6s ease-in-out forwards;
+      z-index: 60;
+      color: var(--navy-700);
+    }
+
+    @keyframes plane-fly {
+      0%   { transform: translateX(-15%) translateY(0) rotate(0deg); opacity: 0; }
+      10%  { opacity: 1; }
+      60%  { transform: translateX(65vw) translateY(-4vh) rotate(1deg); }
+      100% { transform: translateX(110vw) translateY(-6vh) rotate(2deg); opacity: 0; }
+    }
+
+    @keyframes spin-globe { 0% { transform: rotate(0deg);} 100% { transform: rotate(360deg);} }
+    .rotate-globe { display:inline-block; animation: spin-globe 6s linear infinite; }
+  </style>
+</head>
+<body class="min-h-screen text-[var(--navy-900)]">
+  <div id="effects" class="pointer-events-none fixed inset-0 overflow-hidden z-50"></div>
+
+  <div class="max-w-5xl mx-auto p-4">
+    <h1 class="text-3xl font-bold mb-4 text-[var(--navy-900)] flex items-center gap-2">
+      <span class="rotate-globe">🌍</span>
+      <span>Global Business Trips Q&A Board</span>
+    </h1>
+
+    <blockquote class="quote-box mb-6 p-4 text-sm text-[var(--navy-700)]">
+      <span class="font-semibold text-[var(--navy-800)]">“A woman in business doesn’t just chase success — she defines it, shapes it, and makes room for others to rise with her.”</span>
+    </blockquote>
+
+    <div id="flash" class="hidden mb-4 p-3 rounded-lg border border-[var(--navy-600)] bg-[var(--navy-100)] text-[var(--navy-800)] text-sm"></div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="shadow-lg border rounded-xl border-[var(--navy-600)] bg-[var(--navy-700)] text-white">
+        <div class="p-4 border-b font-semibold text-white">Ask a Question</div>
+        <div class="p-4 space-y-3">
+          <input id="name" class="w-full border border-[var(--navy-500)] rounded px-3 py-2 text-[var(--navy-900)] placeholder-[var(--navy-400)] focus:outline-none focus:ring-2 focus:ring-[var(--navy-600)]" placeholder="Your name (optional)" />
+          <input id="qtext" class="w-full border border-[var(--navy-500)] rounded px-3 py-2 text-[var(--navy-900)] placeholder-[var(--navy-400)] focus:outline-none focus:ring-2 focus:ring-[var(--navy-600)]" placeholder="Type your question…" />
+          <textarea id="qdetails" rows="4" class="w-full border border-[var(--navy-500)] rounded px-3 py-2 text-[var(--navy-900)] placeholder-[var(--navy-400)] focus:outline-none focus:ring-2 focus:ring-[var(--navy-600)]" placeholder="Add context (optional)"></textarea>
+          <button id="postBtn" class="w-full border rounded px-3 py-2 bg-[var(--navy-600)] hover:bg-[var(--navy-500)] text-white transition">➤ Post</button>
+          <p class="text-xs text-[var(--navy-100)]">Questions are saved securely and update in real time.</p>
+        </div>
+      </div>
+
+      <div>
+        <input id="search" class="w-full border border-[var(--navy-400)] rounded px-3 py-2 mb-2 text-[var(--navy-900)] placeholder-[var(--navy-400)] focus:outline-none focus:ring-2 focus:ring-[var(--navy-600)]" placeholder="Search questions…" />
+        <div id="list" class="space-y-3">
+          <div class="border rounded-xl p-6 text-center bg-[var(--navy-700)] text-white">
+            No questions yet. Be the first to ask about your next business trip!
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+  // --- Firebase CDN imports (modular SDK) ---
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+  import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, updateDoc, doc, increment, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+
+  // --- 1) Init Firebase ---
+  // TODO: Paste your Firebase web app config below
+  const firebaseConfig = {
+    // apiKey: "...",
+    // authDomain: "...",
+    // projectId: "...",
+    // storageBucket: "...",
+    // messagingSenderId: "...",
+    // appId: "..."
+  };
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  // --- 2) UI helpers (kept from your preview) ---
+  const tips = [
+    "Posted! Another suitcase of wisdom just hit the carousel.",
+    "Question queued. Boarding wisdom shortly ✈️",
+    "Thanks—your question just upgraded everyone’s itinerary.",
+    "Nice one! Curiosity is the best frequent-flyer program.",
+    "Logged! The only bad question is the one that misses its flight.",
+    "Added—great minds travel together.",
+    "Submitted! We’ll tackle this before the seatbelt sign is off.",
+    "Up next: answers with extra legroom.",
+  ];
+
+  const showFlash = (msg) => {
+    const el = document.getElementById("flash");
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.remove("hidden");
+    clearTimeout(window.__flashTimer);
+    window.__flashTimer = setTimeout(() => el.classList.add("hidden"), 3500);
+  };
+
+  const celebrate = () => {
+    const layer = document.getElementById('effects');
+    if (!layer) return;
+    const plane = document.createElement('div');
+    plane.className = 'plane';
+    plane.textContent = '✈️';
+    layer.appendChild(plane);
+    setTimeout(() => plane.remove(), 3800);
+  };
+
+  // --- 3) Local state & rendering (fed by Firestore) ---
+  let items = [];
+  let search = "";
+  const listEl = document.getElementById("list");
+
+  function render() {
+    listEl.innerHTML = "";
+    const q = search.toLowerCase().trim();
+    const filtered = items
+      .filter(x => !q || x.text?.toLowerCase().includes(q) || (x.details||"").toLowerCase().includes(q) || (x.name||"").toLowerCase().includes(q))
+      .sort((a,b) => (b.upvotes||0) - (a.upvotes||0));
+
+    if (!filtered.length) {
+      const empty = document.createElement("div");
+      empty.className = "border rounded-xl p-6 text-center bg-[var(--navy-700)] text-white";
+      empty.textContent = "No questions yet. Be the first to ask about your next business trip!";
+      listEl.appendChild(empty);
+      return;
+    }
+
+    filtered.forEach(item => {
+      const card = document.createElement("div");
+      card.className = "shadow-md border border-[var(--navy-400)] rounded-xl bg-[var(--navy-600)] text-white hover:shadow-lg transition";
+      card.innerHTML = `
+        <div class=\"p-4 flex items-start gap-3\">
+          <button class=\"rounded-xl px-3 py-2 border border-[var(--navy-400)] hover:bg-[var(--navy-500)] transition\" aria-label=\"Upvote\">
+            <div class=\"text-sm text-white\">👍🏽 <span class=\"uv\">${item.upvotes||0}</span></div>
+          </button>
+          <div class=\"flex-1 min-w-0\">
+            <div class=\"flex flex-wrap items-center gap-2\">
+              <div class=\"font-medium text-white truncate\">${item.text}</div>
+              <span class=\"text-xs bg-[var(--navy-500)] text-white px-2 py-1 rounded\">${item.addressed ? "✔ Addressed" : "⏳ Open"}</span>
+            </div>
+            ${item.details ? `<p class=\"text-sm text-[var(--navy-100)] mt-1 whitespace-pre-wrap\">${item.details}</p>` : ""}
+            <div class=\"mt-2 text-xs text-[var(--navy-200)]\">${item.name ? `Asked by <span class='font-medium text-white'>${item.name}</span>` : ""}</div>
+          </div>
+          <div class=\"flex flex-col items-end gap-2 ml-2\">
+            <button class=\"text-xs underline toggle\" aria-label=\"Toggle addressed\">${item.addressed ? "Unmark" : "Mark addressed"}</button>
+            ${item.addressed ? `<button class=\"text-xs underline remove\" aria-label=\"Remove addressed question\">Remove</button>` : ""}
+          </div>
+        </div>`;
+
+      // Upvote (+1)
+      card.querySelector("button").onclick = async () => {
+        await updateDoc(doc(db, "questions", item.id), { upvotes: increment(1) });
+      };
+
+      // Toggle addressed
+      const tg = card.querySelector("button.toggle");
+      if (tg) tg.onclick = async () => {
+        await updateDoc(doc(db, "questions", item.id), { addressed: !item.addressed });
+      };
+
+      // Remove (only shows when addressed)
+      const rm = card.querySelector("button.remove");
+      if (rm) rm.onclick = async () => {
+        if (!confirm("Remove this addressed question?")) return;
+        await deleteDoc(doc(db, "questions", item.id));
+      };
+      if (rm) rm.onclick = async () => {
+        if (!confirm("Remove this addressed question?")) return;
+        await deleteDoc(doc(db, "questions", item.id));
+      };
+
+      listEl.appendChild(card);
+    });
+  }
+
+  // --- 4) Auth + realtime subscription ---
+  onAuthStateChanged(auth, async user => {
+    if (!user) await signInAnonymously(auth);
+
+    const qRef = query(
+      collection(db, "questions"),
+      orderBy("upvotes", "desc"),
+      orderBy("createdAt", "desc")
+    );
+
+    onSnapshot(qRef, snap => {
+      items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      render();
+    });
+  });
+
+  // --- 5) Create question (persist) ---
+  document.getElementById("postBtn").onclick = async () => {
+    const text = document.getElementById("qtext").value.trim();
+    if (!text) return alert("Please enter a question.");
+    const payload = {
+      text,
+      details: document.getElementById("qdetails").value.trim(),
+      name: document.getElementById("name").value.trim(),
+      upvotes: 1,
+      addressed: false,
+      createdAt: serverTimestamp()
+    };
+    await addDoc(collection(db, "questions"), payload);
+
+    document.getElementById("qtext").value = "";
+    document.getElementById("qdetails").value = "";
+    showFlash(tips[Math.floor(Math.random()*tips.length)]);
+    celebrate();
+  };
+
+  // --- 6) Search ---
+  document.getElementById("search").oninput = (e) => { search = e.target.value; render(); };
+</script>
+  <footer class="mt-12 text-center text-sm text-[var(--navy-700)] border-t border-[var(--navy-100)] py-6">
+    © 2025 Global Business Trips — All Rights Reserved
+  </footer>
+</body>
+</html>
