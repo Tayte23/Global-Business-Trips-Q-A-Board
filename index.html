@@ -114,7 +114,7 @@
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
     import {
       getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp,
-      updateDoc, doc, increment, deleteDoc, setDoc, getDoc
+      updateDoc, doc, increment, deleteDoc, getDoc
     } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -161,8 +161,8 @@
     try { app = initializeApp(firebaseConfig); auth = getAuth(app); db = getFirestore(app); }
     catch (e) { console.error(e); flash("⚠️ Firebase not configured: " + (e.message || e.code)); }
 
-    // Admin state
-    let isAdmin = false;
+    // Admin state (local, gated by passcode check)
+    let isAdmin = localStorage.getItem("isAdmin") === "1";
     const adminBtn = document.getElementById("adminBtn");
     const logoutAdminBtn = document.getElementById("logoutAdminBtn");
     const adminStatus = document.getElementById("adminStatus");
@@ -173,42 +173,46 @@
       adminStatus.textContent = isAdmin ? "Admin" : "Viewer";
       exportBtn.classList.toggle("hidden", !isAdmin);
       logoutAdminBtn.classList.toggle("hidden", !isAdmin);
+      localStorage.setItem("isAdmin", isAdmin ? "1" : "0");
+      render();
     }
+    // reflect persisted state on initial load
+    setAdminUI(isAdmin);
 
-    async function checkIfAdmin(uid) {
-      try {
-        const snap = await getDoc(doc(db, "admins", uid));
-        setAdminUI(snap.exists());
-      } catch {
-        setAdminUI(false);
-      }
-    }
-
-    async function adminLogin() {
-      const code = prompt("Enter admin passcode"); // simple, quick UI
-      if (!code) return;
+    async function enterAdmin() {
+      const input = prompt("Enter admin passcode:");
+      if (input === null) return; // cancelled
 
       try {
-        const uid = auth.currentUser?.uid;
-        await setDoc(doc(db, "admins", uid), { tempCode: code, at: serverTimestamp() }, { merge: true });
-        // If rules accepted this write, you're admin:
-        setAdminUI(true);
-        flash("Admin enabled.");
+        const snap = await getDoc(doc(db, "settings", "admin"));
+        if (!snap.exists()) return flash("Admin error: settings/admin document not found.");
+
+        // Accept number OR string in Firestore
+        const saved = String(snap.data()?.code ?? "").trim();
+        const typed = String(input).trim();
+
+        if (!saved) return flash("Admin error: passcode not set.");
+        if (typed === saved) {
+          setAdminUI(true);
+          flash("Admin mode enabled.");
+        } else {
+          setAdminUI(false);
+          flash("Invalid passcode or permission denied.");
+        }
       } catch (e) {
         setAdminUI(false);
-        flash("Invalid passcode or permission denied.");
+        flash("Admin check failed: " + (e.message || e.code));
         console.error(e);
       }
     }
 
-    function adminLogout() {
-      // Local sign-out from admin mode (server rules still protect writes)
+    function exitAdmin() {
       setAdminUI(false);
-      flash("Admin signed out (local).");
+      flash("Admin mode disabled.");
     }
 
-    adminBtn.onclick = adminLogin;
-    logoutAdminBtn.onclick = adminLogout;
+    adminBtn.onclick = enterAdmin;
+    logoutAdminBtn.onclick = exitAdmin;
 
     // Local state
     let items = [];
@@ -289,7 +293,7 @@
           catch (e) { flash("⚠️ Upvote failed: " + (e.message || e.code)); }
         };
 
-        // Toggle addressed (admin only — UI guarded, rules enforce)
+        // Toggle addressed (admin only — UI gate; secure with rules if needed)
         const tg = card.querySelector("button.toggle");
         if (tg) tg.onclick = async () => {
           try { await updateDoc(doc(db, "questions", item.id), { addressed: !item.addressed }); }
@@ -308,14 +312,11 @@
       });
     }
 
-    // Realtime feed + admin check
+    // Realtime feed
     if (auth) {
       onAuthStateChanged(auth, async (user) => {
         try { if (!user) await signInAnonymously(auth); }
         catch (e) { return flash("⚠️ Auth error: " + (e.message || e.code)); }
-
-        // See if this UID is already an admin (based on your Firestore rules/doc)
-        if (auth.currentUser?.uid) await checkIfAdmin(auth.currentUser.uid);
 
         const qRef = query(
           collection(db, "questions"),
@@ -335,7 +336,7 @@
       const text = qtext.value.trim();
       if (!text) return alert("Please enter a question.");
 
-      // Honeypot: if a bot filled this hidden field, ignore
+      // Honeypot
       const bait = document.getElementById("website").value.trim();
       if (bait) return flash("Submission blocked.");
 
