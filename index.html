@@ -104,7 +104,7 @@
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
     import {
       getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp,
-      updateDoc, doc, increment, deleteDoc, getDoc
+      updateDoc, doc, increment, deleteDoc, getDoc, setDoc
     } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -151,13 +151,13 @@
     try { app = initializeApp(firebaseConfig); auth = getAuth(app); db = getFirestore(app); }
     catch (e) { console.error(e); flash("⚠️ Firebase not configured: " + (e.message || e.code)); }
 
-    // ---------- Render state (MUST come before admin UI uses render) ----------
+    // ---------- Render state ----------
     let items = [];
     let search = "";
     const listEl = document.getElementById("list");
     const countBadge = document.getElementById("countBadge");
     const updatedEl = document.getElementById("lastUpdated");
-    let uiReady = false; // becomes true after render() is defined
+    let uiReady = false;
 
     const qtext = document.getElementById("qtext");
     const qdetails = document.getElementById("qdetails");
@@ -174,7 +174,7 @@
     }
 
     function render() {
-      if (!uiReady) return; // guard during early init
+      if (!uiReady) return;
       listEl.innerHTML = "";
       const q = search.toLowerCase().trim();
       const filtered = items
@@ -223,7 +223,7 @@
           catch (e) { flash("⚠️ Upvote failed: " + (e.message || e.code)); }
         };
 
-        // Admin controls (insert only if admin)
+        // Admin controls
         if (isAdmin) {
           const adminArea = card.querySelector("#adminArea");
           const toggleBtn = document.createElement("button");
@@ -251,7 +251,7 @@
         listEl.appendChild(card);
       });
     }
-    uiReady = true; // render can now run safely
+    uiReady = true;
 
     // ---------- Admin UI ----------
     let isAdmin = localStorage.getItem("isAdmin") === "1";
@@ -266,21 +266,34 @@
       exportBtn.classList.toggle("hidden", !isAdmin);
       logoutAdminBtn.classList.toggle("hidden", !isAdmin);
       localStorage.setItem("isAdmin", isAdmin ? "1" : "0");
-      render(); // now safe
+      render();
     }
-    setAdminUI(isAdmin); // reflect persisted state
+    setAdminUI(isAdmin);
 
+    // NEW: secure passcode flow using rules
     async function enterAdmin() {
-      const input = prompt("Enter admin passcode:");
-      if (input === null) return;
+      const raw = prompt("Enter admin passcode:");
+      if (raw === null) return;
       try {
-        const snap = await getDoc(doc(db, "settings", "admin"));
-        if (!snap.exists()) return flash("Admin error: settings/admin document not found.");
-        const saved = String(snap.data()?.code ?? "").trim(); // number or string
-        if (!saved) return flash("Admin error: passcode not set.");
-        if (String(input).trim() === saved) { setAdminUI(true); flash("Admin mode enabled."); }
-        else { setAdminUI(false); flash("Invalid passcode or permission denied."); }
-      } catch (e) { setAdminUI(false); flash("Admin check failed: " + (e.message || e.code)); console.error(e); }
+        const uid = auth.currentUser?.uid;
+        if (!uid) return flash("Not signed in yet. Reload and try again.");
+        const pass = Number(String(raw).trim()); // coerce to number
+
+        // write admins/{uid} with tempCode; rules verify against settings/admin.code
+        await setDoc(
+          doc(db, "admins", uid),
+          { tempCode: pass, at: serverTimestamp() },
+          { merge: true }
+        );
+
+        // If the write succeeded, rules accepted; enable locally
+        setAdminUI(true);
+        flash("Admin enabled.");
+      } catch (e) {
+        setAdminUI(false);
+        flash("Admin check failed: " + (e.message || e.code));
+        console.error(e);
+      }
     }
     function exitAdmin(){ setAdminUI(false); flash("Admin mode disabled."); }
 
@@ -299,8 +312,10 @@
           orderBy("createdAt","desc")
         );
 
-        onSnapshot(qRef, (snap) => { items = snap.docs.map(d => ({ id:d.id, ...d.data() })); render(); },
-          (err) => flash("⚠️ Firestore read error: " + (err.message || err.code)));
+        onSnapshot(qRef, (snap) => {
+          items = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+          render();
+        }, (err) => flash("⚠️ Firestore read error: " + (err.message || err.code)));
       });
     }
 
