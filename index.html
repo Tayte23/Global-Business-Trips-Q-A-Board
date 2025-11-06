@@ -11,20 +11,14 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    :root {
-      --navy-500: #334b7c;
-      --navy-600: #2d3e6a;
-      --navy-700: #24386b;
-      --navy-800: #1b2b59;
-      --navy-900: #0a1738;
-    }
-    body { font-family: 'Inter', sans-serif; background: linear-gradient(180deg, #f4f8ff 0%, #ffffff 100%); }
-    .quote-box { background: linear-gradient(145deg, #e8f0ff, #f9fbff); box-shadow: 2px 2px 10px rgba(0,0,0,.08), -2px -2px 10px rgba(255,255,255,.7); border-left: 4px solid var(--navy-600); border-radius: .5rem; }
-    .plane { position: fixed; top: 9vh; left: -12vw; font-size: 18px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.15)); animation: plane-fly 3.6s ease-in-out forwards; z-index: 60; color: var(--navy-700); }
-    @keyframes plane-fly { 0%{transform:translateX(-15%) translateY(0) rotate(0deg);opacity:0;} 10%{opacity:1;} 60%{transform:translateX(65vw) translateY(-4vh) rotate(1deg);} 100%{transform:translateX(110vw) translateY(-6vh) rotate(2deg);opacity:0;} }
-    @keyframes spin-globe { 0% { transform: rotate(0deg);} 100% { transform: rotate(360deg);} }
-    .rotate-globe { display:inline-block; animation: spin-globe 6s linear infinite; }
-    .counter { font-size: .75rem; }
+    :root { --navy-500:#334b7c; --navy-600:#2d3e6a; --navy-700:#24386b; --navy-800:#1b2b59; --navy-900:#0a1738; }
+    body { font-family:'Inter',sans-serif; background:linear-gradient(180deg,#f4f8ff 0%,#ffffff 100%); }
+    .quote-box { background:linear-gradient(145deg,#e8f0ff,#f9fbff); box-shadow:2px 2px 10px rgba(0,0,0,.08), -2px -2px 10px rgba(255,255,255,.7); border-left:4px solid var(--navy-600); border-radius:.5rem; }
+    .plane { position:fixed; top:9vh; left:-12vw; font-size:18px; filter:drop-shadow(0 1px 2px rgba(0,0,0,.15)); animation:plane-fly 3.6s ease-in-out forwards; z-index:60; color:var(--navy-700); }
+    @keyframes plane-fly { 0%{transform:translateX(-15%) translateY(0) rotate(0);opacity:0;} 10%{opacity:1;} 60%{transform:translateX(65vw) translateY(-4vh) rotate(1deg);} 100%{transform:translateX(110vw) translateY(-6vh) rotate(2deg);opacity:0;} }
+    @keyframes spin-globe { 0%{transform:rotate(0);} 100%{transform:rotate(360deg);} }
+    .rotate-globe { display:inline-block; animation:spin-globe 6s linear infinite; }
+    .counter { font-size:.75rem; }
   </style>
 </head>
 <body class="min-h-screen text-[var(--navy-900)]">
@@ -40,17 +34,13 @@
       <!-- Admin toolbar -->
       <div class="flex items-center gap-3">
         <span id="adminStatus" class="text-xs text-[var(--navy-600)]">Viewer</span>
-        <button id="adminBtn" class="text-xs px-3 py-1 rounded border border-[var(--navy-400)] hover:bg-[var(--navy-100)]">
-          Admin
-        </button>
-        <button id="logoutAdminBtn" class="hidden text-xs px-3 py-1 rounded border border-[var(--navy-400)] hover:bg-[var(--navy-100)]">
-          Admin sign out
-        </button>
+        <button id="adminBtn" class="text-xs px-3 py-1 rounded border border-[var(--navy-400)] hover:bg-[var(--navy-100)]">Admin</button>
+        <button id="logoutAdminBtn" class="hidden text-xs px-3 py-1 rounded border border-[var(--navy-400)] hover:bg-[var(--navy-100)]">Admin sign out</button>
       </div>
     </header>
 
     <blockquote class="quote-box mb-6 p-4 text-sm text-[var(--navy-700)]">
-      <span class="font-semibold text-[var(--navy-800)]">“A woman in business doesn’t just chase success, she defines it, shapes it, and makes room for others to rise with her.”</span>
+      <span class="font-semibold text-[var(--navy-800)]">“A woman in business doesn’t just chase success — she defines it, shapes it, and makes room for others to rise with her.”</span>
     </blockquote>
 
     <div id="flash" class="hidden mb-4 p-3 rounded-lg border border-[var(--navy-600)] bg-[var(--navy-100)] text-[var(--navy-800)] text-sm"></div>
@@ -127,7 +117,7 @@
       measurementId: "G-GXBRGWTY8F"
     };
 
-    // UI helpers
+    // ---------- UI helpers ----------
     const flash = (msg) => {
       const el = document.getElementById("flash");
       if (!el) return;
@@ -156,99 +146,42 @@
       setTimeout(() => plane.remove(), 3800);
     };
 
-    // Firebase init
+    // ---------- Firebase init ----------
     let app, auth, db;
     try { app = initializeApp(firebaseConfig); auth = getAuth(app); db = getFirestore(app); }
     catch (e) { console.error(e); flash("⚠️ Firebase not configured: " + (e.message || e.code)); }
 
-    // Admin state (local, gated by passcode check)
-    let isAdmin = localStorage.getItem("isAdmin") === "1";
-    const adminBtn = document.getElementById("adminBtn");
-    const logoutAdminBtn = document.getElementById("logoutAdminBtn");
-    const adminStatus = document.getElementById("adminStatus");
-    const exportBtn = document.getElementById("exportBtn");
-
-    function setAdminUI(state) {
-      isAdmin = !!state;
-      adminStatus.textContent = isAdmin ? "Admin" : "Viewer";
-      exportBtn.classList.toggle("hidden", !isAdmin);
-      logoutAdminBtn.classList.toggle("hidden", !isAdmin);
-      localStorage.setItem("isAdmin", isAdmin ? "1" : "0");
-      render();
-    }
-    // reflect persisted state on initial load
-    setAdminUI(isAdmin);
-
-    async function enterAdmin() {
-      const input = prompt("Enter admin passcode:");
-      if (input === null) return; // cancelled
-
-      try {
-        const snap = await getDoc(doc(db, "settings", "admin"));
-        if (!snap.exists()) return flash("Admin error: settings/admin document not found.");
-
-        // Accept number OR string in Firestore
-        const saved = String(snap.data()?.code ?? "").trim();
-        const typed = String(input).trim();
-
-        if (!saved) return flash("Admin error: passcode not set.");
-        if (typed === saved) {
-          setAdminUI(true);
-          flash("Admin mode enabled.");
-        } else {
-          setAdminUI(false);
-          flash("Invalid passcode or permission denied.");
-        }
-      } catch (e) {
-        setAdminUI(false);
-        flash("Admin check failed: " + (e.message || e.code));
-        console.error(e);
-      }
-    }
-
-    function exitAdmin() {
-      setAdminUI(false);
-      flash("Admin mode disabled.");
-    }
-
-    adminBtn.onclick = enterAdmin;
-    logoutAdminBtn.onclick = exitAdmin;
-
-    // Local state
+    // ---------- Render state (MUST come before admin UI uses render) ----------
     let items = [];
     let search = "";
     const listEl = document.getElementById("list");
     const countBadge = document.getElementById("countBadge");
     const updatedEl = document.getElementById("lastUpdated");
+    let uiReady = false; // becomes true after render() is defined
 
-    // Char counters
     const qtext = document.getElementById("qtext");
     const qdetails = document.getElementById("qdetails");
     const qtextCount = document.getElementById("qtextCount");
     const qdetailsCount = document.getElementById("qdetailsCount");
-    const updateCounts = () => {
-      qtextCount.textContent = qtext.value.length;
-      qdetailsCount.textContent = qdetails.value.length;
-    };
+    const updateCounts = () => { qtextCount.textContent = qtext.value.length; qdetailsCount.textContent = qdetails.value.length; };
     qtext.addEventListener("input", updateCounts);
     qdetails.addEventListener("input", updateCounts);
     updateCounts();
 
     function fmtDate(ts) {
-      try {
-        const d = ts?.toDate ? ts.toDate() : (ts instanceof Date ? ts : null);
-        return d ? d.toLocaleString() : "";
-      } catch { return ""; }
+      try { const d = ts?.toDate ? ts.toDate() : (ts instanceof Date ? ts : null); return d ? d.toLocaleString() : ""; }
+      catch { return ""; }
     }
 
     function render() {
+      if (!uiReady) return; // guard during early init
       listEl.innerHTML = "";
       const q = search.toLowerCase().trim();
       const filtered = items
         .filter(x => !q || x.text?.toLowerCase().includes(q) || (x.details||"").toLowerCase().includes(q) || (x.name||"").toLowerCase().includes(q))
         .sort((a,b) => (b.upvotes||0) - (a.upvotes||0));
 
-      countBadge.textContent = filtered.length.toString();
+      countBadge.textContent = String(filtered.length);
 
       if (!filtered.length) {
         const empty = document.createElement("div");
@@ -281,38 +214,80 @@
                 ${created ? `· <span>${created}</span>` : ""}
               </div>
             </div>
-            <div class="flex flex-col items-end gap-2 ml-2">
-              ${isAdmin ? `<button class="text-xs underline toggle" aria-label="Toggle addressed">${item.addressed ? "Unmark" : "Mark addressed"}</button>` : ""}
-              ${isAdmin && item.addressed ? `<button class="text-xs underline remove" aria-label="Remove addressed question">Remove</button>` : ""}
-            </div>
+            <div class="flex flex-col items-end gap-2 ml-2" id="adminArea"></div>
           </div>`;
 
-        // Upvote (always allowed)
+        // Upvote
         card.querySelector("button").onclick = async () => {
           try { await updateDoc(doc(db, "questions", item.id), { upvotes: increment(1) }); }
           catch (e) { flash("⚠️ Upvote failed: " + (e.message || e.code)); }
         };
 
-        // Toggle addressed (admin only — UI gate; secure with rules if needed)
-        const tg = card.querySelector("button.toggle");
-        if (tg) tg.onclick = async () => {
-          try { await updateDoc(doc(db, "questions", item.id), { addressed: !item.addressed }); }
-          catch (e) { flash("⚠️ Update failed: " + (e.message || e.code)); }
-        };
+        // Admin controls (insert only if admin)
+        if (isAdmin) {
+          const adminArea = card.querySelector("#adminArea");
+          const toggleBtn = document.createElement("button");
+          toggleBtn.className = "text-xs underline";
+          toggleBtn.textContent = item.addressed ? "Unmark" : "Mark addressed";
+          toggleBtn.onclick = async () => {
+            try { await updateDoc(doc(db, "questions", item.id), { addressed: !item.addressed }); }
+            catch (e) { flash("⚠️ Update failed: " + (e.message || e.code)); }
+          };
+          adminArea.appendChild(toggleBtn);
 
-        // Remove (addressed only — admin)
-        const rm = card.querySelector("button.remove");
-        if (rm) rm.onclick = async () => {
-          if (!confirm("Remove this addressed question?")) return;
-          try { await deleteDoc(doc(db, "questions", item.id)); }
-          catch (e) { flash("⚠️ Delete failed: " + (e.message || e.code)); }
-        };
+          if (item.addressed) {
+            const rm = document.createElement("button");
+            rm.className = "text-xs underline";
+            rm.textContent = "Remove";
+            rm.onclick = async () => {
+              if (!confirm("Remove this addressed question?")) return;
+              try { await deleteDoc(doc(db, "questions", item.id)); }
+              catch (e) { flash("⚠️ Delete failed: " + (e.message || e.code)); }
+            };
+            adminArea.appendChild(rm);
+          }
+        }
 
         listEl.appendChild(card);
       });
     }
+    uiReady = true; // render can now run safely
 
-    // Realtime feed
+    // ---------- Admin UI ----------
+    let isAdmin = localStorage.getItem("isAdmin") === "1";
+    const adminBtn = document.getElementById("adminBtn");
+    const logoutAdminBtn = document.getElementById("logoutAdminBtn");
+    const adminStatus = document.getElementById("adminStatus");
+    const exportBtn = document.getElementById("exportBtn");
+
+    function setAdminUI(state) {
+      isAdmin = !!state;
+      adminStatus.textContent = isAdmin ? "Admin" : "Viewer";
+      exportBtn.classList.toggle("hidden", !isAdmin);
+      logoutAdminBtn.classList.toggle("hidden", !isAdmin);
+      localStorage.setItem("isAdmin", isAdmin ? "1" : "0");
+      render(); // now safe
+    }
+    setAdminUI(isAdmin); // reflect persisted state
+
+    async function enterAdmin() {
+      const input = prompt("Enter admin passcode:");
+      if (input === null) return;
+      try {
+        const snap = await getDoc(doc(db, "settings", "admin"));
+        if (!snap.exists()) return flash("Admin error: settings/admin document not found.");
+        const saved = String(snap.data()?.code ?? "").trim(); // number or string
+        if (!saved) return flash("Admin error: passcode not set.");
+        if (String(input).trim() === saved) { setAdminUI(true); flash("Admin mode enabled."); }
+        else { setAdminUI(false); flash("Invalid passcode or permission denied."); }
+      } catch (e) { setAdminUI(false); flash("Admin check failed: " + (e.message || e.code)); console.error(e); }
+    }
+    function exitAdmin(){ setAdminUI(false); flash("Admin mode disabled."); }
+
+    adminBtn.onclick = enterAdmin;
+    logoutAdminBtn.onclick = exitAdmin;
+
+    // ---------- Auth + realtime feed ----------
     if (auth) {
       onAuthStateChanged(auth, async (user) => {
         try { if (!user) await signInAnonymously(auth); }
@@ -320,30 +295,23 @@
 
         const qRef = query(
           collection(db, "questions"),
-          orderBy("upvotes", "desc"),
-          orderBy("createdAt", "desc")
+          orderBy("upvotes","desc"),
+          orderBy("createdAt","desc")
         );
 
-        onSnapshot(qRef, (snap) => {
-          items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          render();
-        }, (err) => flash("⚠️ Firestore read error: " + (err.message || err.code)));
+        onSnapshot(qRef, (snap) => { items = snap.docs.map(d => ({ id:d.id, ...d.data() })); render(); },
+          (err) => flash("⚠️ Firestore read error: " + (err.message || err.code)));
       });
     }
 
-    // Post (with light anti-spam: cooldown + honeypot)
+    // ---------- Post (cooldown + honeypot) ----------
     document.getElementById("postBtn").onclick = async () => {
       const text = qtext.value.trim();
       if (!text) return alert("Please enter a question.");
+      if (document.getElementById("website").value.trim()) return flash("Submission blocked.");
 
-      // Honeypot
-      const bait = document.getElementById("website").value.trim();
-      if (bait) return flash("Submission blocked.");
-
-      // Cooldown (30s)
       const last = Number(localStorage.getItem("lastPostTs") || 0);
-      const now = Date.now();
-      const cooldownMs = 30_000;
+      const now = Date.now(), cooldownMs = 30_000;
       if (now - last < cooldownMs) {
         const wait = Math.ceil((cooldownMs - (now - last))/1000);
         return flash(`Please wait ${wait}s before posting again.`);
@@ -364,17 +332,14 @@
         flash(tips[Math.floor(Math.random() * tips.length)]);
         celebrate();
         localStorage.setItem("lastPostTs", String(Date.now()));
-      } catch (e) {
-        flash("⚠️ Post failed: " + (e.message || e.code));
-        console.error(e);
-      }
+      } catch (e) { flash("⚠️ Post failed: " + (e.message || e.code)); console.error(e); }
     };
 
-    // Search controls
+    // ---------- Search ----------
     document.getElementById("search").oninput = (e) => { search = e.target.value; render(); };
     document.getElementById("clearSearch").onclick = () => { document.getElementById("search").value = ""; search = ""; render(); };
 
-    // Export CSV (admin only)
+    // ---------- CSV export (admin only) ----------
     exportBtn.onclick = () => {
       if (!isAdmin) return flash("Admin only.");
       if (!items.length) return flash("Nothing to export yet.");
@@ -385,11 +350,11 @@
         (x.text||"").replaceAll('"','""'),
         (x.details||"").replaceAll('"','""'),
         x.upvotes||0,
-        x.addressed ? "true" : "false",
+        x.addressed ? "true":"false",
         fmtDate(x.createdAt)
       ]);
-      const csv = [header, ...rows].map(r => r.map(v => `"${v}"`).join(",")).join("\n");
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const csv = [header,...rows].map(r => r.map(v => `"${v}"`).join(",")).join("\n");
+      const blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = "questions.csv"; a.click();
